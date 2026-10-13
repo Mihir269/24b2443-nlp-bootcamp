@@ -84,6 +84,7 @@ labels; F1 0.627 → 0.690 on top of NLI alone). It bypasses the retriever and N
 
 ```
 ├── README.md                  ← you are here
+├── 24b2443_nlp_bootcamp.zip   ← the submitted zip (passes the official check_format.py)
 ├── report.md                  ← submission: answers to Q1–Q5 (≤ 100 words each)
 ├── results.json               ← submission: settings, models, validation scores, timings, memory
 ├── predictions/               ← submission: 7 eval runs, 2 validation runs (Q1), 3 Task 5 CSVs
@@ -98,7 +99,7 @@ labels; F1 0.627 → 0.690 on top of NLI alone). It bypasses the retriever and N
 │   └── DATA_ANALYSIS.md       ← dataset statistics, retrieval depth analysis, verifier behaviour, eval vs validation (9 figures)
 ```
 
-The submitted zip (`24b2443_nlp_bootcamp.zip`) is exactly `code/` (without `code/experiments/` and `code/tools/`),
+The submitted zip (`24b2443_nlp_bootcamp.zip`, included at the repository root) is exactly `code/` (without `code/experiments/` and `code/tools/`),
 `predictions/`, `results.json` and `report.md`; it passes the official `check_format.py`. The provided data is not
 redistributed here: put the `data/` folder from the assignment's data zip at the repository root to run the code.
 
