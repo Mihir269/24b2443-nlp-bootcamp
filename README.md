@@ -3,9 +3,24 @@
 **Inter-IIT Tech Meet 15.0 — NLP Selection Bootcamp** · Mihir Gune (24b2443)
 
 Given a scientific claim, find the abstracts in a 5,183-abstract corpus that support or contradict it (**retrieval**),
-then decide which (**verification**); if no abstract does, the claim is NOT ENOUGH INFO. This is the retrieval and
-grounding core of a RAG system, built with open-source encoders only (≤ 400M parameters, no generative LLMs), with all
-tuning and model selection on the training and validation claims.
+then decide which (**verification**); if no abstract does, the claim is NOT ENOUGH INFO. Built with open-source
+encoders only (≤ 400M parameters, no generative LLMs); all tuning and model selection on the training and validation
+claims.
+
+This repository is the extracted submission (`24b2443_nlp_bootcamp.zip`): `code/`, `predictions/`, `results.json`,
+`report.md`. This README summarises the system, the results, and **every experiment that was tried**.
+
+---
+
+## Repository contents
+
+```
+├── README.md          ← this file: system, results, experiment log, analysis
+├── report.md          ← answers to Q1–Q5 (≤ 100 words each)
+├── results.json       ← settings, models, validation scores, timings, memory
+├── predictions/       ← 7 eval runs (.trec), 2 validation runs for Q1, 3 Task 5 CSVs (all pass check_format.py)
+└── code/              ← the scripts that produce every submitted file + code/README.md (15 ordered commands)
+```
 
 ## Results (validation split)
 
@@ -24,9 +39,9 @@ tuning and model selection on the training and validation claims.
 | Zero-shot NLI (starting point) | 0.603 | 0.613 | 0.608 | 0.593 |
 | **Submitted: cross-encoders select evidence, NLI ensemble labels it** | 0.760 | 0.766 | **0.763** | **0.763** |
 
-Validation has 162 claims (106 with evidence), so retrieval differences below ≈ 0.01 nDCG@10 and verification
-differences below ≈ 0.02 F1 are within noise. Every adopted change was checked with a paired bootstrap test
-(retrieval) or 5-fold cross-validation inside validation (verification). All timings are CPU numbers (no GPU).
+Validation has 162 claims (106 with evidence), so differences below ≈ 0.01 nDCG@10 or ≈ 0.02 F1 are within noise.
+Every adopted change was checked with a paired bootstrap test (retrieval) or 5-fold cross-validation inside validation
+(verification); "CV" below always means that. All timings are CPU numbers (4 vCPU, no GPU).
 
 ## The final system
 
@@ -46,91 +61,175 @@ claim
    nothing passes   → NOT ENOUGH INFO
 ```
 
-## What made the difference
-
-1. **Splitting verification into two jobs** — F1 0.63 → 0.76. NLI is good at *direction* but poor at deciding whether
-   an abstract is evidence at all (AUC 0.68); a biomedical cross-encoder does that far better (AUC 0.96). Letting the
-   cross-encoder decide relevance and NLI decide the label cut false alarms on NOT-ENOUGH-INFO claims from 30 to 10.
-2. **Using training claims as document expansion** — BM25 0.865 → 0.928 (p < 0.001). 62 of 112 validation gold
-   abstracts are also gold for a training claim (SciFact pairs each claim with negated/sibling claims). No effect on
-   claims whose gold abstract is never cited, so it does not hurt anything.
-3. **Hybrid fusion** — +0.021 over the best single retriever; keyword and dense search fail on different claims
-   (rare exact terms vs paraphrases, report Q1).
-4. **The right reranker** — a general cross-encoder *hurt* (0.870: it prefers related studies over the annotated
-   evidence); a biomedical one with expanded text reached 0.956, and 0.968 after fine-tuning on training claims.
-5. **Hard negatives** — 0.920 vs 0.906 for random negatives; random-negative training overfits after one epoch
-   (validation 0.906 → 0.891 while training-claim nDCG rises 0.960 → 0.972).
-6. **Verifying over the reranker's top 3** instead of the hybrid's — 118 vs 112 of 124 gold abstracts reachable;
-   CV F1 0.751 → 0.763.
-
-## What did not help
-
-| Idea | Result |
-|---|---|
-| BM25 parameter tuning beyond defaults | +0.003 (noise) |
-| RM3 pseudo-relevance feedback | +0.003, p = 0.30 |
-| LSA retrieval / fused with BM25 | 0.673 / −0.004 |
-| Sentence-level BM25, title boosting | −0.011 / −0.003 |
-| Learning-to-rank on lexical features | +0.002, p = 0.40 |
-| Fine-tuned bi-encoder or dense claim matching added to the hybrid | +0.003 / +0.0025 (same signal as the expansion) |
-| Retrieval-score gate for NOT ENOUGH INFO | CV 0.571 vs 0.593 (overfits) |
-| Group-specific thresholds, label-bias correction | CV 0.743–0.748 vs 0.751 (overfit) |
-| Learned "how many abstracts" model trained on training claims | 0.745 held-out vs 0.763 (unbiased features had to come from weaker zero-shot models) |
-
-Deliberately **not submitted**: the *paired-claim prior* (copy a near-duplicate training claim's abstracts with flipped
-labels; F1 0.627 → 0.690 on top of NLI alone). It bypasses the retriever and NLI classifier the task asks for.
-
-## Repository layout
-
-```
-├── README.md                  ← you are here
-├── 24b2443_nlp_bootcamp.zip   ← the submitted zip (passes the official check_format.py)
-├── report.md                  ← submission: answers to Q1–Q5 (≤ 100 words each)
-├── results.json               ← submission: settings, models, validation scores, timings, memory
-├── predictions/               ← submission: 7 eval runs, 2 validation runs (Q1), 3 Task 5 CSVs
-├── code/                      ← submission: pipeline scripts + README with exact reproduction commands
-│   ├── experiments/           ←   exploration scripts for ideas that were tried (not in the zip)
-│   └── tools/                 ←   helper for long background jobs
-├── experiments/               ← outputs of every alternative system, grouped by task, with a README
-├── docs/
-│   ├── WALKTHROUGH.md         ← in-depth explanation of every idea: intuition, implementation, result, why
-│   ├── FINDINGS.md            ← all numbers, including rejected ideas
-│   ├── ERROR_ANALYSIS.md      ← confusion matrix, every validation error, error rate by claim type and topic
-│   └── DATA_ANALYSIS.md       ← dataset statistics, retrieval depth analysis, verifier behaviour, eval vs validation (9 figures)
-```
-
-The submitted zip (`24b2443_nlp_bootcamp.zip`, included at the repository root) is exactly `code/` (without `code/experiments/` and `code/tools/`),
-`predictions/`, `results.json` and `report.md`; it passes the official `check_format.py`. The provided data is not
-redistributed here: put the `data/` folder from the assignment's data zip at the repository root to run the code.
-
 ## Reproducing
 
 ```bash
 pip install -r code/requirements.txt
-# put the provided data/ folder (corpus + claims) at the repository root
-cd code && python t1_bm25.py ...       # full ordered list of 15 commands with times: code/README.md
+# put the provided data/ folder (corpus.jsonl, train/val/eval_claims.jsonl) at the repository root
+cd code    # then the 15 commands in code/README.md, in order
 ```
 
-Pretrained models are downloaded from the HuggingFace Hub. On a 4-vCPU machine the full pipeline takes roughly 15 hours
-(fine-tuning dominates); with a GPU it takes well under an hour. The final steps (`make_t3_rerank.py`,
-`t5_verify_v2.py`) reproduce the submitted files byte for byte from cached scores.
+Pretrained models download from the HuggingFace Hub. The full pipeline takes ≈ 15 hours on a 4-vCPU machine
+(fine-tuning dominates), well under an hour on a GPU. The final steps (`make_t3_rerank.py`, `t5_verify_v2.py`)
+reproduce the submitted files byte for byte from cached scores.
 
-## Where to read more
+---
 
-| If you want… | Read |
+# Experiment log
+
+Everything tried, in the order it was done, with the outcome. ✅ = in the submission, ❌ = tried and rejected,
+⏸ = works but deliberately left out.
+
+## 0. Looking at the data first
+
+Two findings shaped the whole design:
+
+- **Gold abstracts recur across splits.** 62 of the 112 validation gold abstracts are also gold for some training claim;
+  only 365 of 5,183 abstracts (7%) are ever evidence, 143 of them for two or more claims.
+- **Claims come in negated pairs.** SciFact writes a claim from a paper and then a negated version ("X *lacks* Y" /
+  "X *shows* Y"). About a third of every split (train 31%, validation 33%, eval 30%) has a near-duplicate training claim;
+  on validation the pair shares the abstract with the **label flipped** in 30 of 35 cases.
+
+Other data facts used later:
+
+| Finding | Number |
 |---|---|
-| The answers to the five questions | `report.md` |
-| Why each design choice was made, step by step | `docs/WALKTHROUGH.md` |
-| Every number, including failed experiments | `docs/FINDINGS.md`, `experiments/README.md` |
-| Which claims the system gets wrong and why | `docs/ERROR_ANALYSIS.md` |
-| Statistics and charts on the data, retrieval, verifier and eval predictions | `docs/DATA_ANALYSIS.md` |
-| How to run each step | `code/README.md` |
+| Evidence sentences in the last third of the abstract (results / conclusions) | 53% (first third: 11%) |
+| Claim content words found in the gold abstract | 70% on average; 13% of pairs share less than half |
+| Claims containing a negation word: CONTRADICT vs SUPPORT | 16% vs 6% |
+| Claims mixing SUPPORT and CONTRADICT evidence | 0 (a claim's evidence always points one way) |
+| Labels (validation): SUPPORT / CONTRADICT / NOT ENOUGH INFO | 41% / 25% / 35% |
 
-## Limitations
+## 1. Task 1 – BM25
+
+| Experiment | Result | |
+|---|---|---|
+| Own sparse-matrix BM25; grid of 896 configurations (k1 × b × stemming × stop words × tokenizer × title) | **0.865** (k1 = 1.2, b = 0.3) | ✅ |
+| Default k1 = 0.9, b = 0.4 | 0.863: tuning k1/b is within noise; stemming (+0.024) and the title (+0.008) matter | |
+| Metric cross-checked against `pytrec_eval` (identical) and `rank_bm25` (0.861) | — | |
+
+## 2. Retrieval ideas without neural models
+
+| Experiment | Result | |
+|---|---|---|
+| **Document expansion: append to each abstract the training claims that cite it** | 0.865 → **0.928** (p < 0.001); no effect on claims whose gold abstract is never cited (0.887 → 0.887) | ✅ (inside the hybrid) |
+| RM3 pseudo-relevance feedback | 0.869 (+0.003, p = 0.30) | ❌ |
+| LSA (256-dim SVD) retrieval / fused with BM25 | 0.673 / ≤ 0.861 | ❌ |
+| Best-sentence BM25 fused with document BM25 | −0.011 | ❌ |
+| Title boosting | −0.003 to −0.023 | ❌ |
+| Learning-to-rank (logistic regression on lexical features, trained on training claims) | 0.867 (+0.002, p = 0.40) | ❌ |
+| Lexical verification baseline (no neural model) | F1 0.44 | (floor for Task 5) |
+
+Lesson: lexical signals were saturated; gains had to come from meaning (neural models) or from the training claims.
+
+## 3. Task 2 – Dense retrieval
+
+| Model | nDCG@10 | Index time | Latency / query | Memory | |
+|---|---|---|---|---|---|
+| `BAAI/bge-base-en-v1.5` (general) | **0.898** | 18.5 min | 152 ms | 433 MB | ✅ |
+| `ncbi/MedCPT` query + article encoders (biomedical) | 0.826 | 24 min | 138 ms | 850 MB | ✅ |
+
+The general model beat the biomedical one (MedCPT was trained on short search queries; claims are full sentences).
+BM25 wins on rare exact terms (claims 673, 1261: "LDL-cholesterol", "reactive oxygen species"); bge wins on paraphrases
+(766, 1311: "medications" ↔ "pharmacotherapy", "lncRNAs" ↔ "LincRNA"). Per claim, BM25 wins 14, bge 16, 76 tie (Q1).
+
+## 4. Task 3 – Hybrid fusion
+
+| Experiment | Result | |
+|---|---|---|
+| Min-max fusion, expanded BM25 + bge-base + MedCPT (1.0 / 0.5 / 0.25), from a grid over z-score / min-max / RRF and weights | **0.949** (+0.021 over the best single system) | ✅ |
+| Same without the expansion (BM25 + bge-base) | 0.915 | |
+| RRF (rank fusion) | below min-max: it discards how confident each scorer is | ❌ |
+| Adding the Task 4 fine-tuned bi-encoder to the hybrid | +0.003 (p = 0.30) | ❌ |
+| Dense claim-to-claim matching (new claim vs training claims citing each abstract) | +0.0025 (p = 0.12); 0.915 → 0.942 without expansion: same signal as the expansion | ❌ |
+
+## 5. Task 3 – Reranking (from harmful to best system)
+
+| Experiment (hybrid top 30) | nDCG@10 | |
+|---|---|---|
+| `BAAI/bge-reranker-base` (general) | **0.870, hurt**: it prefers closely related studies over the annotated evidence | ❌ |
+| `cross-encoder/ms-marco-MiniLM-L-6-v2`, plain / with citing training claims | 0.890 / 0.940 | ❌ |
+| `ncbi/MedCPT-Cross-Encoder`, plain / with citing training claims | 0.913 / 0.956 | |
+| **MedCPT cross-encoder fine-tuned on training claims** (BCE, BM25 hard negatives, leave-one-out expansion, 2 epochs) | **0.968** (+0.019 over hybrid, p = 0.10; 13 claims better, 7 worse) | ✅ |
+| Fusing reranker and first-stage scores | 0.962, but not allowed: the format requires pure reranker order | ❌ |
+
+Cost: 9.2 s/query on CPU for k = 30, ≈ 30× the hybrid. Rerank depth chosen on validation (k = 10 / 20 / 30 → 30).
+
+## 6. Task 4 – Fine-tuning a bi-encoder
+
+Contrastive (InfoNCE) training on the 440 (claim, gold abstract) training pairs, in-batch negatives plus one explicit
+negative per pair; validation and training-claim nDCG@10 tracked after every epoch, best validation epoch kept.
+
+| Model | Before | Random negatives | Hard negatives (BM25 ∪ base model, ranks 3–30, gold removed) | |
+|---|---|---|---|---|
+| bge-small | 0.870 | 0.882 | 0.899 | ❌ (superseded) |
+| **bge-base** | 0.877 | **0.906** (epoch 1) | **0.920** (epoch 2) | ✅ |
+
+**Overfitting (Q3):** with random negatives, validation peaked after epoch 1 and fell (0.906 → 0.896 → 0.891 → 0.892)
+while training-claim nDCG kept rising (0.960 → 0.972). Hard negatives overfit less (0.920 → 0.917).
+bge-base needed batch 8 on a 15 GB machine (batch 16 ran out of memory).
+
+## 7. Task 5 – Verification
+
+| Experiment | F1 | CV F1 | |
+|---|---|---|---|
+| Lexical features, no neural model | 0.44 | — | ❌ |
+| Zero-shot NLI (`MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli`), max over sentences, one threshold | 0.608 | 0.593 | ❌ |
+| NLI fine-tuned on training rationales (+ mined neutral sentences) | 0.627 | 0.608 | |
+| Gate by retrieval score | 0.612 | 0.571 (overfits) | ❌ |
+| **Cross-encoder decides *whether* an abstract is evidence, NLI decides *which label*** (zero-shot / fine-tuned / averaged NLI labels) | — | 0.659 / 0.726 / **0.741** | |
+| Gate with the fine-tuned cross-encoder only | 0.759 | 0.737 | ❌ |
+| Gate with the average of both cross-encoders (hybrid top 3) | 0.771 | 0.751 | |
+| **Same, verifying the t3_rerank top 3** (118 vs 112 of 124 gold abstracts reachable) | **0.763** | **0.763** | ✅ |
+| Separate thresholds for claims with / without a training twin; clinical vs molecular topics; label-bias term | — | 0.745 / 0.748 / 0.743 vs 0.751 (overfit) | ❌ |
+| Learned "how many abstracts" model trained on validation (nested CV) | — | 0.745–0.747 | ❌ |
+| Learned "how many abstracts" model trained on the 647 training claims (unbiased zero-shot features) | held-out 0.745 | 0.757 | ❌ |
+| Paired-claim prior (copy a near-duplicate training claim's abstracts with flipped labels) | 0.690 on top of fine-tuned NLI | 0.682 | ⏸ bypasses the retriever and NLI classifier the task asks for |
+
+**The key insight:** NLI is good at *direction* (given the correct abstract it picks the right label 91.5% of the time)
+but poor at deciding *whether* an abstract is evidence at all (AUC 0.68). The biomedical cross-encoder does that far
+better (AUC 0.96): 89% of gold candidates pass its threshold vs 8% of non-gold ones. Splitting the two decisions cut
+false alarms on NOT-ENOUGH-INFO claims from 30 to 10.
+
+## 8. Error analysis (validation, submitted verifier)
+
+| True \ predicted | SUPPORT | CONTRADICT | NOT ENOUGH INFO |
+|---|---|---|---|
+| SUPPORT (65) | 55 | 3 | 7 |
+| CONTRADICT (40) | 4 | 32 | 4 |
+| NOT ENOUGH INFO (56) | 7 | 3 | 46 |
+
+40 of 162 claims are not exactly right: 11 miss all evidence, 11 miss a second abstract or add an extra one, 10 are
+false alarms on NOT-ENOUGH-INFO claims, 6 have the wrong label, 2 pick the wrong abstract. **32 of 40 errors are about
+how many abstracts to return, not the label.** Only 2 are retrieval misses (5%). Significantly harder claims
+(Fisher exact test): several gold abstracts (67% wrong, p = 0.002), no near-duplicate training claim (32% vs 9%,
+p = 0.002), molecular / cell-biology topics (29% vs 12% for clinical, p = 0.023).
+
+## 9. Robustness checks
+
+| Check | Result |
+|---|---|
+| Gain on claims the expansion cannot help (gold abstract never cited in training, 45 claims) | BM25 0.887 → rerank 0.945: most of the gain is genuine retrieval improvement |
+| Optimism of choosing settings on validation (choose on 4/5, score the held-out 1/5) | hybrid weights +0.007, rerank depth +0.005, verification thresholds 0 |
+| Leakage | none: expansion, fine-tuning and hard negatives use training claims only; validation only chooses settings |
+| Calibration | predicted NOT ENOUGH INFO on validation 35.2% vs true 34.6% |
+| Eval vs validation | eval predicts more NOT ENOUGH INFO (42%): its top abstracts are less often cited by training claims (38% vs 44%), so fewer pass the evidence threshold; near-duplicate rates are similar (30% vs 33%) |
+| Reproducibility | final steps regenerate the submitted files byte for byte; all files pass `check_format.py` |
+
+## 10. Engineering issues fixed along the way
+
+- The DeBERTa NLI checkpoint is stored in fp16 and produced NaN when fine-tuned that way → all models force-loaded in
+  float32 (zero-shot results unchanged).
+- Unsorted batches padded every sentence to full-abstract length → length-sorted batching (identical results, several
+  times faster).
+- bge-base fine-tuning at batch 16 ran out of memory → batch 8.
+
+## Limitations and next step
 
 - The training-claim expansion and the reranker's use of citing training claims work because of how SciFact was built
   (sibling and negated claims share abstracts). They use only training data, as the rules allow, but would not transfer
   to a corpus without labelled neighbouring claims.
-- 32 of the 40 remaining validation errors are about *how many* abstracts to return (missed second abstracts, false
-  alarms, misses); only 6 have the wrong label. The next step would be cross-fitted fine-tuning of the cross-encoder so a
-  learned selection model can be trained on unbiased but strong scores (report Q5).
+- The remaining errors are about *how many* abstracts to return. A learned selection model lost (0.745 vs 0.763) because
+  unbiased features on the training claims had to come from weaker zero-shot models. Next step: cross-fitted
+  fine-tuning of the cross-encoder (k models, each holding out part of the training claims) to give unbiased but strong
+  features (report Q5).
